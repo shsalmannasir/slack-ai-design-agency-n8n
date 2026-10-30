@@ -1,0 +1,56 @@
+{
+  "client_id": "apex_athletics",
+  "company_name": "Apex Athletics Global",
+  "brand_guidelines": {
+    "mission": "Empowering human physical potential through biomechanical sportswear",
+    "tone_of_voice": ["Authoritative", "Minimalist", "High-Performance", "No-Nonsense"],
+    "color_palette": {
+      "primary_dark": "#0B0C10",
+      "primary_accent": "#66FCF1",
+      "secondary_cyan": "#45A29E",
+      "neutral_light": "#C5C6C7",
+      "pure_white": "#FFFFFF"
+    },
+    "typography_rules": {
+      "headline_font": "Futura Bold / Helvetica Neue Heavy",
+      "casing": "ALL CAPS ONLY FOR HEADLINES",
+      "max_text_characters": 25
+    },
+    "banned_elements": [
+      "No smiling stock models holding thumbs up",
+      "No neon rainbow gradients (only cyan and charcoal)",
+      "No generic gym dumbbell cliparts",
+      "No blurry or warped letters"
+    ]
+  },
+  "approved_past_work": [
+    {
+      "campaign_name": "Winter Endurance Series 2025",
+      "visual_style_description": "Moody, overcast athletic trail running, sharp rim lighting on athlete silhouette, bold cyan text 'DEFIANCE' centered at the top",
+      "headline": "DEFIANCE",
+      "copy_snippet": "Cold is a condition. Commitment is a choice. #ApexAthletics",
+      "why_approved": "Clean typographic hierarchy, high contrast, perfect alignment with dark aesthetic."
+    },
+    {
+      "campaign_name": "Carbon Core Launch",
+      "visual_style_description": "Macro close-up shot of technical weave fabric with subtle metallic sheen, stark black background, minimalist white branding",
+      "headline": "UNBREAKABLE",
+      "copy_snippet": "Engineered at the fiber level for zero friction.",
+      "why_approved": "Focused on craftsmanship and technical innovation rather than hype."
+    }
+  ],
+  "rejection_history": [
+    {
+      "date": "2025-11-14",
+      "rejected_element": "Bright saturated yellow badge saying '50% OFF'",
+      "client_feedback": "Looks like a cheap supermarket flyer. We never use bright yellow or tacky discount badges.",
+      "corrective_rule": "NEVER use yellow, red discount badges, or cliparts. Discounts must be styled in sleek cyan and charcoal typography."
+    },
+    {
+      "date": "2026-01-20",
+      "rejected_element": "AI generated hand with 6 fingers holding water bottle",
+      "client_feedback": "Obvious AI distortion in hands, embarrassing to post.",
+      "corrective_rule": "Vision QA must flag any hand/finger deformities or blurred text before client preview."
+    }
+  ]
+}

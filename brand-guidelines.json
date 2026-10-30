@@ -1,0 +1,38 @@
+{
+  "brand_name": "Apex Athletics",
+  "industry": "High-Performance Sportswear & Wellness",
+  "brand_voice": {
+    "tone": ["Empowering", "Direct", "Scientific yet accessible", "Relentless"],
+    "banned_words": ["Cheap", "Miracle", "Guaranteed overnight", "Easy", "Magic", "Casual"],
+    "target_audience": "Athletes, fitness professionals, and high performers aged 22-45"
+  },
+  "visual_identity": {
+    "color_palette": {
+      "primary_dark": "#0B0C10",
+      "primary_accent": "#66FCF1",
+      "secondary_cyan": "#45A29E",
+      "neutral_light": "#C5C6C7",
+      "pure_white": "#FFFFFF"
+    },
+    "typography_style": {
+      "headline_font": "Futura Bold / Helvetica Neue Compressed",
+      "casing": "UPPERCASE for all bold headlines",
+      "max_text_words_in_image": 5
+    },
+    "aesthetic_direction": {
+      "style": "Cinematic editorial athletic photography, bold graphic overlays, high-contrast chiaroscuro lighting, minimalist typography",
+      "composition": "Strong geometric framing, rule of thirds, clean negative space for typography",
+      "negative_constraints": "No cartoonish styles, no cluttered gradients, no blurry distorted anatomy, no generic royalty-free stock looks"
+    }
+  },
+  "social_specs": {
+    "instagram": {
+      "aspect_ratio": "4:5 (1080x1350) or 1:1 (1080x1080)",
+      "caption_structure": "1. Disruptive Hook\n2. 2-3 Sentences Value/Story\n3. Clear CTA\n4. 8-12 Hyper-targeted Hashtags"
+    },
+    "facebook": {
+      "aspect_ratio": "1:1 or 16:9 for link previews",
+      "caption_structure": "Story-driven, direct community question at the end."
+    }
+  }
+}

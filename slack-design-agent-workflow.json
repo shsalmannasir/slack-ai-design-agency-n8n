@@ -1,0 +1,366 @@
+{
+  "name": "Enterprise Slack AI Graphic Design Agency",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-design-agent",
+        "options": {}
+      },
+      "id": "1",
+      "name": "Slack Webhook Listener",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.body.challenge }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "2",
+      "name": "Is Slack URL Verification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.body.challenge }}",
+        "options": {}
+      },
+      "id": "3",
+      "name": "Respond to Slack Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.body.event.type }}",
+              "rightValue": "app_mention",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "c3",
+              "leftValue": "={{ $json.body.event.bot_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "4",
+      "name": "Filter Valid User Mention",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $('Slack Webhook Listener').item.json.body.event.channel }}"
+            },
+            {
+              "name": "thread_ts",
+              "value": "={{ $('Slack Webhook Listener').item.json.body.event.ts }}"
+            },
+            {
+              "name": "text",
+              "value": "🎨 *Brief Received by the Design Studio!* \nOur *Creative Director* and *Art Director* are reviewing your request against brand guidelines and generating 10 cohesive campaign assets with formatted captions. This will take ~60–90 seconds..."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5",
+      "name": "Send Immediate Ack to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Creative Director Prompt Builder with Brand Guidelines\nconst userPrompt = $('Slack Webhook Listener').item.json.body.event.text;\nconst brandGuidelines = {\n  brand_name: 'Apex Athletics',\n  palette: 'Dark #0B0C10, Cyan #66FCF1, Secondary #45A29E, White #FFFFFF',\n  typography: 'Bold uppercase sans-serif',\n  aesthetic: 'Cinematic high-contrast sports editorial, clean typography overlays',\n  negative_rules: 'No cheesy stock photos, no cluttered messy backgrounds'\n};\n\nreturn [{\n  json: {\n    system_prompt: `You are the Executive Creative Director of an elite advertising agency. \nBrand Identity: ${JSON.stringify(brandGuidelines)}\n\nYour task is to take the client prompt and produce an array of exactly 10 distinct, highly coordinated social media posts (Instagram & Facebook).\n\nRespond ONLY with a valid JSON array of 10 objects with this exact structure:\n[\n  {\n    \"post_number\": 1,\n    \"theme\": \"Short theme description\",\n    \"headline_text\": \"3-5 WORDS MAX FOR IMAGE\",\n    \"art_direction_prompt\": \"Detailed descriptive prompt for Ideogram / Flux image generation specifying composition, subject, lighting, mood, and text: 'HEADLINE'\",\n    \"copy_caption\": \"Engaging Instagram/Facebook caption with hook, story, CTA\",\n    \"hashtags\": \"#Hashtag1 #Hashtag2 #Hashtag3\"\n  }\n] Do not wrap in markdown or backticks.`,\n    user_prompt: userPrompt\n  }\n}];"
+      },
+      "id": "6",
+      "name": "CD Brief & Brand Rules Compiler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENAI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o\",\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    { \"role\": \"system\", \"content\": {{ JSON.stringify($json.system_prompt) }} },\n    { \"role\": \"user\", \"content\": {{ JSON.stringify($json.user_prompt) }} }\n  ],\n  \"temperature\": 0.7\n}",
+        "options": {}
+      },
+      "id": "7",
+      "name": "Creative Director Agent (GPT-4o)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1340, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the array of 10 campaign assets from CD output\nconst rawContent = $json.choices[0].message.content;\nlet parsed;\ntry {\n  parsed = JSON.parse(rawContent);\n  // If the model wrapped it in an object key like { \"posts\": [...] }\n  if (!Array.isArray(parsed) && parsed.posts) {\n    parsed = parsed.posts;\n  } else if (!Array.isArray(parsed)) {\n    parsed = Object.values(parsed)[0];\n  }\n} catch (e) {\n  throw new Error('Failed to parse CD response: ' + e.message);\n}\n\nreturn parsed.map((item, index) => ({\n  json: {\n    ...item,\n    post_index: index + 1,\n    slack_channel: $('Slack Webhook Listener').item.json.body.event.channel,\n    slack_thread_ts: $('Slack Webhook Listener').item.json.body.event.ts\n  }\n}));"
+      },
+      "id": "8",
+      "name": "Split Campaign Into 10 Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 360]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "9",
+      "name": "Loop Over 10 Posts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1780, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ideogram.ai/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Api-Key",
+              "value": "={{ $env.IDEOGRAM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"image_request\": {\n    \"prompt\": {{ JSON.stringify($json.art_direction_prompt) }},\n    \"aspect_ratio\": \"ASPECT_4_5\",\n    \"model\": \"V_2\",\n    \"magic_prompt_option\": \"AUTO\"\n  }\n}",
+        "options": {}
+      },
+      "id": "10",
+      "name": "Ideogram v2 Graphic Design API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2000, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": {{ JSON.stringify($('Loop Over 10 Posts').item.json.slack_channel) }},\n  \"thread_ts\": {{ JSON.stringify($('Loop Over 10 Posts').item.json.slack_thread_ts) }},\n  \"text\": \"✨ Asset #\" + {{ $('Loop Over 10 Posts').item.json.post_index }} + \": \" + {{ JSON.stringify($('Loop Over 10 Posts').item.json.theme) }},\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"📸 Asset #\" + {{ $('Loop Over 10 Posts').item.json.post_index }} + \": \" + {{ JSON.stringify($('Loop Over 10 Posts').item.json.theme) }}\n      }\n    },\n    {\n      \"type\": \"image\",\n      \"image_url\": {{ JSON.stringify($json.data[0].url) }},\n      \"alt_text\": {{ JSON.stringify($('Loop Over 10 Posts').item.json.headline_text) }}\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Caption:*\n\" + {{ JSON.stringify($('Loop Over 10 Posts').item.json.copy_caption) }} + \"\\n\\n*Hashtags:* \" + {{ JSON.stringify($('Loop Over 10 Posts').item.json.hashtags) }}\n      }\n    },\n    {\n      \"type\": \"divider\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "11",
+      "name": "Deliver Asset Card to Slack Thread",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 360]
+    }
+  ],
+  "connections": {
+    "Slack Webhook Listener": {
+      "main": [
+        [
+          {
+            "node": "Is Slack URL Verification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Slack URL Verification?": {
+      "main": [
+        [
+          {
+            "node": "Respond to Slack Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Filter Valid User Mention",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid User Mention": {
+      "main": [
+        [
+          {
+            "node": "Send Immediate Ack to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Immediate Ack to Slack": {
+      "main": [
+        [
+          {
+            "node": "CD Brief & Brand Rules Compiler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CD Brief & Brand Rules Compiler": {
+      "main": [
+        [
+          {
+            "node": "Creative Director Agent (GPT-4o)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creative Director Agent (GPT-4o)": {
+      "main": [
+        [
+          {
+            "node": "Split Campaign Into 10 Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Campaign Into 10 Items": {
+      "main": [
+        [
+          {
+            "node": "Loop Over 10 Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over 10 Posts": {
+      "main": [
+        [
+          {
+            "node": "Ideogram v2 Graphic Design API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ideogram v2 Graphic Design API": {
+      "main": [
+        [
+          {
+            "node": "Deliver Asset Card to Slack Thread",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deliver Asset Card to Slack Thread": {
+      "main": [
+        [
+          {
+            "node": "Loop Over 10 Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

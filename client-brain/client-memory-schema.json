@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ClientDesignBrainSchema",
+  "description": "The persistent memory and knowledge base for an enterprise client",
+  "type": "object",
+  "properties": {
+    "client_id": { "type": "string" },
+    "company_name": { "type": "string" },
+    "brand_guidelines": {
+      "type": "object",
+      "properties": {
+        "mission": { "type": "string" },
+        "tone_of_voice": { "type": "array", "items": { "type": "string" } },
+        "color_palette": {
+          "type": "object",
+          "properties": {
+            "primary_hex": { "type": "string" },
+            "secondary_hex": { "type": "string" },
+            "accent_hex": { "type": "string" },
+            "background_hex": { "type": "string" }
+          }
+        },
+        "typography_rules": {
+          "headline_font": { "type": "string" },
+          "casing": { "type": "string" },
+          "max_text_characters": { "type": "integer" }
+        },
+        "banned_elements": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "approved_past_work": {
+      "type": "array",
+      "description": "Golden examples of approved posts that represent the client's gold standard",
+      "items": {
+        "type": "object",
+        "properties": {
+          "campaign_name": { "type": "string" },
+          "visual_style_description": { "type": "string" },
+          "headline": { "type": "string" },
+          "copy_snippet": { "type": "string" },
+          "why_approved": { "type": "string" },
+          "image_reference_url": { "type": "string" }
+        }
+      }
+    },
+    "rejection_history": {
+      "type": "array",
+      "description": "Historical mistakes to never repeat for this client",
+      "items": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string" },
+          "rejected_element": { "type": "string" },
+          "client_feedback": { "type": "string" },
+          "corrective_rule": { "type": "string" }
+        }
+      }
+    }
+  }
+}
