@@ -1,0 +1,17 @@
+{
+  "channels": {
+    "C08APEX123": "apex_athletics",
+    "C08MARIAB456": "maria_b",
+    "default": "apex_athletics"
+  },
+  "keyword_routing": {
+    "maria b": "maria_b",
+    "lawn": "maria_b",
+    "couture": "maria_b",
+    "bridal": "maria_b",
+    "apex": "apex_athletics",
+    "athletics": "apex_athletics",
+    "fitness": "apex_athletics",
+    "sportswear": "apex_athletics"
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "client_id": "maria_b",
+  "company_name": "Maria B Designs",
+  "industry": "Luxury Haute Couture, Embroidered Lawn & Bridal Wear",
+  "brand_guidelines": {
+    "mission": "Celebrating feminine grace, heritage artisanal craftsmanship, and contemporary Pakistani royal aesthetics.",
+    "tone_of_voice": ["Regal", "Poetic", "Artisanal", "Graceful", "Sophisticated"],
+    "color_palette": {
+      "primary_plum_jewel": "#4A0E2E",
+      "accent_antique_gold": "#D4AF37",
+      "secondary_dusty_rose": "#C59B9B",
+      "neutral_warm_ivory": "#FDFBF7",
+      "deep_slate": "#1E1E24"
+    },
+    "typography_rules": {
+      "headline_font": "Playfair Display / Bodoni Bold Serif",
+      "casing": "Title Case or Elegant Serif Small Caps",
+      "max_text_characters": 30
+    },
+    "banned_elements": [
+      "No cartoonish styles, cliparts, or modern tech gradients",
+      "No distorted anatomy, fingers, or warped facial expressions",
+      "NEVER hallucinate, repaint, or distort authentic garment embroidery",
+      "No cheap sales banners, neon badges, or aggressive discount graphics"
+    ]
+  },
+  "product_accuracy_rule": {
+    "enforce_authentic_garment_preservation": true,
+    "instructions": "CRITICAL PRODUCT INTEGRITY MANDATE: The AI must NEVER generate or alter the garments, fabric weaves, or embroidery motifs. The workflow accepts real Slack photo attachments of the authentic Maria B clothing. The image generator is strictly restricted to generating heritage architectural backdrops (e.g., Mughal arches, sunlit marble pavilions, botanical verandas, soft golden hour lighting) and regal typographic overlays around the authentic garment."
+  },
+  "approved_past_work": [
+    {
+      "campaign_name": "Lawn Heritage Collection 2026",
+      "visual_style_description": "Sunlit Lahore fort courtyard, delicate morning mist, warm golden hour rim lighting, authentic embroidered chiffon suit untouched, elegant gold serif typography reading 'Noor-e-Jahan'",
+      "headline": "Noor-e-Jahan",
+      "copy_snippet": "Woven with whispers of heritage. Introducing the Maria B Unstitched Luxury Lawn Collection.",
+      "why_approved": "Flawless garment preservation, authentic fabric draping, magnificent heritage ambiance."
+    },
+    {
+      "campaign_name": "Couture Bridal Soirée",
+      "visual_style_description": "Deep velvet emerald backdrop, candlelit antique silver candelabras, crisp antique gold typography 'ETERNAL GRACE'",
+      "headline": "Eternal Grace",
+      "copy_snippet": "Every stitch tells an heirloom tale. Step into regal elegance with Maria B Bridal.",
+      "why_approved": "Elevated royal aesthetic without overpowering the handcrafted zardozi embroidery."
+    }
+  ],
+  "rejection_history": [
+    {
+      "date": "2025-12-05",
+      "rejected_element": "AI generated fake floral embroidery that looked synthetic and mismatched the real retail suit",
+      "client_feedback": "Customers complained that the delivered suit looked different from the AI image! AI must never generate clothes. Use our real studio shots.",
+      "corrective_rule": "MANDATORY: Never synthesize garments. When Maria B is active, product image attachments must be preserved."
+    },
+    {
+      "date": "2026-02-14",
+      "rejected_element": "Modern neon pink sans-serif headline",
+      "client_feedback": "Looks like a fast-fashion discounter, totally off-brand for high-end couture.",
+      "corrective_rule": "Typography must strictly be classical luxury serif (Playfair Display / Bodoni) in antique gold (#D4AF37) or deep plum."
+    }
+  ]
+}

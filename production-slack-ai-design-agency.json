@@ -1,0 +1,1086 @@
+{
+  "name": "Production Slack AI Graphic Design Agency",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-design-agent",
+        "options": {}
+      },
+      "id": "node-webhook-ingress",
+      "name": "Slack Webhook Ingress",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c_challenge",
+              "leftValue": "={{ $json.body.challenge }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-check-challenge",
+      "name": "Is Slack URL Verification?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [320, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.body.challenge }}",
+        "options": {}
+      },
+      "id": "node-respond-challenge",
+      "name": "Respond to Slack Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [540, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Security & Reliability Ingress Guardrail\n// 1. Drop Slack Retries to prevent runaway execution loops\n// 2. Validate Event Integrity\nconst headers = $json.headers || {};\nconst body = $json.body || {};\n\nconst isRetry = headers['x-slack-retry-num'] !== undefined || headers['X-Slack-Retry-Num'] !== undefined;\nconst event = body.event || {};\nconst isBot = event.bot_id !== undefined || event.subtype === 'bot_message';\nconst isValidEvent = (event.type === 'app_mention' || event.type === 'message') && !isBot;\n\nreturn [{\n  json: {\n    is_retry: isRetry,\n    is_valid_event: isValidEvent,\n    event: event,\n    channel_id: event.channel,\n    thread_ts: event.thread_ts || event.ts,\n    user_id: event.user,\n    prompt_text: (event.text || '').replace(/<@[A-Z0-9]+>/g, '').trim(),\n    files: event.files || []\n  }\n}];"
+      },
+      "id": "node-security-filter",
+      "name": "Security & Retry Guardrail",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [540, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c_valid",
+              "leftValue": "={{ $json.is_valid_event }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "c_not_retry",
+              "leftValue": "={{ $json.is_retry }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-filter-valid-event",
+      "name": "Filter Valid Event?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [760, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel_id }}"
+            },
+            {
+              "name": "thread_ts",
+              "value": "={{ $json.thread_ts }}"
+            },
+            {
+              "name": "text",
+              "value": "⚡ *Brief Received!* Evaluating campaign parameters against client guidelines..."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-fast-ack",
+      "name": "Fast In-Thread Ack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENAI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"You are the Creative Agency Intake Evaluator. Analyze the user request across 6 mandatory dimensions:\\n1. Target Platform & Dimensions\\n2. Campaign Objective\\n3. Product Focus\\n4. Target Audience\\n5. Visual Style\\n6. Reference Assets\\n\\nReturn JSON strictly:\\n{\\n  \\\"status\\\": \\\"READY_FOR_PLANNING\\\" | \\\"NEEDS_CLARIFICATION\\\",\\n  \\\"completeness_score\\\": number (0-100),\\n  \\\"missing_dimensions\\\": string[],\\n  \\\"clarification_checklist\\\": string[],\\n  \\\"extracted_parameters\\\": {\\n    \\\"platform\\\": string,\\n    \\\"objective\\\": string,\\n    \\\"product\\\": string,\\n    \\\"audience\\\": string,\\n    \\\"style\\\": string\\n  }\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($('Security & Retry Guardrail').item.json.prompt_text) }}\n    }\n  ],\n  \"temperature\": 0.2\n}",
+        "options": {}
+      },
+      "id": "node-intake-evaluator",
+      "name": "Anti-Lazy Intake Evaluator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1200, 240]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c_ready",
+              "leftValue": "={{ JSON.parse($json.choices[0].message.content).status }}",
+              "rightValue": "READY_FOR_PLANNING",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-check-intake-status",
+      "name": "Is Brief Complete?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1420, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": {{ JSON.stringify($('Security & Retry Guardrail').item.json.channel_id) }},\n  \"thread_ts\": {{ JSON.stringify($('Security & Retry Guardrail').item.json.thread_ts) }},\n  \"text\": \"⚠️ *Brief Needs Clarification Before We Start*\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"📋 Intake Checklist: Clarification Required\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"Your request is missing essential creative parameters. To guarantee high aesthetic quality and protect token spend, please reply with:\\n\\n\" + JSON.parse($('Anti-Lazy Intake Evaluator').item.json.choices[0].message.content).clarification_checklist.map((item, i) => `${i+1}. ${item}`).join('\\n')\n      }\n    },\n    {\n      \"type\": \"context\",\n      \"elements\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"💡 *Tip:* Reply directly in this thread with the details to start campaign generation.\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "node-post-intake-checklist",
+      "name": "Post Intake Checklist & Halt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1640, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Dynamic Multi-Client Brain Engine\n// Identifies client by channel ID, prompt keywords, or default\nconst prompt = $('Security & Retry Guardrail').item.json.prompt_text.toLowerCase();\nconst channelId = $('Security & Retry Guardrail').item.json.channel_id;\nconst files = $('Security & Retry Guardrail').item.json.files || [];\n\nlet clientId = 'apex_athletics';\nif (prompt.includes('maria b') || prompt.includes('lawn') || prompt.includes('couture') || prompt.includes('bridal')) {\n  clientId = 'maria_b';\n}\n\n// Brand Brain Definitions\nconst brandBrains = {\n  apex_athletics: {\n    client_id: 'apex_athletics',\n    company_name: 'Apex Athletics Global',\n    industry: 'High-Performance Biomechanical Sportswear',\n    colors: 'Primary Dark #0B0C10, Accent Cyan #66FCF1, Secondary #45A29E, Pure White #FFFFFF',\n    typography: 'Futura Bold / ALL CAPS / Max 4 words in graphic',\n    tone: 'Empowering, Direct, High-Performance, Minimalist',\n    banned_elements: 'No cheap yellow discount badges, no smiling stock models, no distorted anatomy',\n    golden_examples: 'Moody trail runner silhouette with cyan bold text DEFIANCE; Macro fiber weave shot with white text UNBREAKABLE',\n    rejections: 'Rejected bright yellow discount badge; Rejected deformed hand with 6 fingers',\n    fashion_rule: null\n  },\n  maria_b: {\n    client_id: 'maria_b',\n    company_name: 'Maria B Designs',\n    industry: 'Luxury Haute Couture, Embroidered Lawn & Bridal Wear',\n    colors: 'Primary Plum #4A0E2E, Accent Gold #D4AF37, Secondary Rose #C59B9B, Ivory #FDFBF7',\n    typography: 'Playfair Display / Bodoni Bold Serif / Elegant Title Case',\n    tone: 'Regal, Poetic, Artisanal, Graceful, Sophisticated',\n    banned_elements: 'No cartoonish styles, no neon colors, no cheap sales badges, NEVER alter authentic garment embroidery',\n    golden_examples: 'Sunlit Lahore fort courtyard with authentic embroidered chiffon suit and gold serif text Noor-e-Jahan',\n    rejections: 'Rejected synthetic AI embroidery that mismatched actual retail catalog suit',\n    fashion_rule: 'CRITICAL PRODUCT INTEGRITY: Never synthesize or alter garments. Accept authentic product attachments from Slack. The image engine generates only heritage architectural backgrounds, atmospheric lighting, and regal typography around the real garment.'\n  }\n};\n\nconst activeBrain = brandBrains[clientId];\nconst hasProductAttachment = files.length > 0;\nconst productAttachmentUrl = hasProductAttachment ? files[0].url_private_download : null;\n\nreturn [{\n  json: {\n    client: activeBrain,\n    client_id: clientId,\n    has_product_attachment: hasProductAttachment,\n    product_attachment_url: productAttachmentUrl,\n    prompt_text: $('Security & Retry Guardrail').item.json.prompt_text,\n    channel_id: channelId,\n    thread_ts: $('Security & Retry Guardrail').item.json.thread_ts,\n    campaign_id: 'camp_' + Date.now().toString(36)\n  }\n}];"
+      },
+      "id": "node-dynamic-brain-lookup",
+      "name": "Dynamic Multi-Client Brain Lookup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1640, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENAI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o\",\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": `You are the Executive Creative Director of an elite ad agency.\\nClient: ${$json.client.company_name} (${$json.client.industry})\\nBrand Identity:\\n- Palette: ${$json.client.colors}\\n- Typography: ${$json.client.typography}\\n- Tone: ${$json.client.tone}\\n- Banned: ${$json.client.banned_elements}\\n- Proven Approved Work: ${$json.client.golden_examples}\\n- Historical Rejections (NEVER REPEAT): ${$json.client.rejections}\\n${$json.client.fashion_rule ? '- Fashion Rule: ' + $json.client.fashion_rule : ''}\\n\\nTask: Generate a master 10-post social media campaign plan (Instagram 4:5 & Facebook).\\n\\nReturn JSON strictly:\\n{\\n  \\\"campaign_name\\\": string,\\n  \\\"client_id\\\": \"${$json.client_id}\",\\n  \\\"total_posts\\\": 10,\\n  \\\"posts\\\": [\\n    {\\n      \\\"post_number\\\": 1,\\n      \\\"theme\\\": string,\\n      \\\"headline_text\\\": string (3-4 words max),\\n      \\\"art_direction_prompt\\\": string (detailed prompt specifying composition, lighting, style, and text: 'HEADLINE'),\\n      \\\"copy\\\": {\\n        \\\"hook\\\": string,\\n        \\\"body\\\": string,\\n        \\\"cta\\\": string,\\n        \\\"hashtags\\\": string\\n      },\\n      \\\"target_platform\\\": \\\"Instagram Feed (4:5)\\\",\\n      \\\"model_preference\\\": \\\"ideogram_v2\\\" | \\\"google_gemini\\\"\\n    }\\n  ]\\n}`\n    },\n    {\n      \"role\": \"user\",\n      \"content\": {{ JSON.stringify($json.prompt_text) }}\n    }\n  ],\n  \"temperature\": 0.7\n}",
+        "options": {}
+      },
+      "id": "node-cd-planner",
+      "name": "Creative Director Campaign Planner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1860, 360]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract Post 1 and compile Dynamic Copywriter Data\nconst cdResponse = JSON.parse($json.choices[0].message.content);\nconst posts = cdResponse.posts || [];\nconst post1 = posts[0] || {};\nconst brainData = $('Dynamic Multi-Client Brain Lookup').item.json;\n\nreturn [{\n  json: {\n    campaign_id: brainData.campaign_id,\n    campaign_name: cdResponse.campaign_name,\n    client_id: brainData.client_id,\n    client_name: brainData.client.company_name,\n    channel_id: brainData.channel_id,\n    thread_ts: brainData.thread_ts,\n    current_post: 1,\n    total_posts: 10,\n    retry_count: 0,\n    theme: post1.theme || 'Brand Launch',\n    headline_text: post1.headline_text || 'EXCELLENCE',\n    art_direction_prompt: post1.art_direction_prompt || 'Minimalist bold design',\n    caption_hook: (post1.copy && post1.copy.hook) || '',\n    caption_body: (post1.copy && post1.copy.body) || '',\n    caption_cta: (post1.copy && post1.copy.cta) || '',\n    hashtags: (post1.copy && post1.copy.hashtags) || '',\n    target_platform: post1.target_platform || 'Instagram (4:5)',\n    model_preference: post1.model_preference || 'ideogram_v2',\n    all_posts_plan: posts\n  }\n}];"
+      },
+      "id": "node-extract-post-copy",
+      "name": "Dynamic Copywriter & Parameter Extraction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2080, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c_model",
+              "leftValue": "={{ $json.model_preference }}",
+              "rightValue": "google_gemini",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-image-provider-router",
+      "name": "Image Provider Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2300, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.ideogram.ai/generate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Api-Key",
+              "value": "={{ $env.IDEOGRAM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"image_request\": {\n    \"prompt\": {{ JSON.stringify($json.art_direction_prompt) }},\n    \"aspect_ratio\": \"ASPECT_4_5\",\n    \"model\": \"V_2\",\n    \"magic_prompt_option\": \"AUTO\"\n  }\n}",
+        "options": {}
+      },
+      "id": "node-ideogram-v2",
+      "name": "Ideogram v2 Graphic Engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2540, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generateImages:predict",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-goog-api-key",
+              "value": "={{ $env.GEMINI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"instances\": [\n    { \"prompt\": {{ JSON.stringify($json.art_direction_prompt) }} }\n  ],\n  \"parameters\": {\n    \"aspectRatio\": \"4:5\",\n    \"sampleCount\": 1\n  }\n}",
+        "options": {}
+      },
+      "id": "node-google-gemini",
+      "name": "Google Gemini / Imagen Engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2540, 460]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize Image Output URL\nconst ideogramData = $input.first()?.json?.data;\nconst geminiData = $input.first()?.json?.predictions;\n\nlet imageUrl = '';\nif (ideogramData && ideogramData[0]) {\n  imageUrl = ideogramData[0].url;\n} else if (geminiData && geminiData[0]) {\n  imageUrl = 'data:image/jpeg;base64,' + geminiData[0].bytesBase64Encoded;\n}\n\nconst state = $('Dynamic Copywriter & Parameter Extraction').item.json;\nreturn [{\n  json: {\n    ...state,\n    raw_generated_image_url: imageUrl\n  }\n}];"
+      },
+      "id": "node-normalize-image-url",
+      "name": "Normalize Image URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2760, 360]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.raw_generated_image_url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "node-download-binary",
+      "name": "Download Image Binary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2980, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/files.getUploadURLExternal",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "filename",
+              "value": "={{ $('Dynamic Copywriter & Parameter Extraction').item.json.campaign_id }}_post_{{ $('Dynamic Copywriter & Parameter Extraction').item.json.current_post }}.jpg"
+            },
+            {
+              "name": "length",
+              "value": "1000000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-permanent-storage",
+      "name": "Permanent Storage (Slack files.uploadV2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3200, 360]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.OPENAI_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o\",\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": `You are the Principal Vision QA Inspector.\\nTarget Headline to Verify: \"${$('Dynamic Copywriter & Parameter Extraction').item.json.headline_text}\"\\nClient Brand: ${$('Dynamic Copywriter & Parameter Extraction').item.json.client_name}\\n\\nInspect the generated graphic design asset for:\\n1. Exact character-by-character headline spelling (No blurriness, no hallucinated glyphs)\\n2. Brand visual alignment & color palette compliance\\n3. Product/Garment accuracy (No deformed clothing, anatomical distortions, or ugly artifacts)\\n\\nReturn JSON strictly:\\n{\\n  \\\"passed\\\": boolean,\\n  \\\"score\\\": number (0-100),\\n  \\\"detected_text\\\": string,\\n  \\\"spelling_correct\\\": boolean,\\n  \\\"is_text_blurry\\\": boolean,\\n  \\\"checks\\\": {\\n    \\\"brand_compliance\\\": boolean,\\n    \\\"product_accuracy\\\": boolean,\\n    \\\"readability\\\": boolean\\n  },\\n  \\\"critique\\\": string,\\n  \\\"issues\\\": string[]\\n}`\n    },\n    {\n      \"role\": \"user\",\n      \"content\": [\n        { \"type\": \"text\", \"text\": \"Inspect this generated graphic design asset:\" },\n        { \"type\": \"image_url\", \"image_url\": { \"url\": {{ JSON.stringify($('Normalize Image URL').item.json.raw_generated_image_url) }} } }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "node-vision-qa-inspector",
+      "name": "Multimodal Vision QA Inspector",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3420, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c_score",
+              "leftValue": "={{ JSON.parse($json.choices[0].message.content).score }}",
+              "rightValue": 80,
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            },
+            {
+              "id": "c_pass",
+              "leftValue": "={{ JSON.parse($json.choices[0].message.content).passed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-check-qa-pass",
+      "name": "Did Vision QA Pass?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3640, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c_retry",
+              "leftValue": "={{ $('Dynamic Copywriter & Parameter Extraction').item.json.retry_count }}",
+              "rightValue": 2,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-check-retry-limit",
+      "name": "Retries < 2?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3860, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Increment Retry Count and Prepend QA Critique to Prompt\nconst qaData = JSON.parse($('Multimodal Vision QA Inspector').item.json.choices[0].message.content);\nconst state = $('Dynamic Copywriter & Parameter Extraction').item.json;\n\nstate.retry_count += 1;\nstate.art_direction_prompt = `AVOID PREVIOUS FLAW: ${qaData.critique}. Ensure razor sharp typography reading '${state.headline_text}'. ${state.art_direction_prompt}`;\n\nreturn [{\n  json: state\n}];"
+      },
+      "id": "node-increment-retry",
+      "name": "Auto-Retry Prompt Refiner",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4080, 440]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare Dynamic Slack Review Card Payload\nconst qaData = JSON.parse($('Multimodal Vision QA Inspector').item.json.choices[0].message.content);\nconst state = $('Dynamic Copywriter & Parameter Extraction').item.json;\nconst imageUrl = $('Normalize Image URL').item.json.raw_generated_image_url;\n\nconst isPassed = qaData.passed && qaData.score >= 80;\nconst qaBadge = isPassed ? `🟢 PASSED (${qaData.score}/100)` : `⚠️ NEEDS ATTENTION (${qaData.score}/100)`;\n\nreturn [{\n  json: {\n    channel_id: state.channel_id,\n    thread_ts: state.thread_ts,\n    campaign_id: state.campaign_id,\n    current_post: state.current_post,\n    total_posts: state.total_posts,\n    theme: state.theme,\n    headline_text: state.headline_text,\n    caption_hook: state.caption_hook,\n    caption_body: state.caption_body,\n    caption_cta: state.caption_cta,\n    hashtags: state.hashtags,\n    qa_badge: qaBadge,\n    qa_score: qaData.score,\n    critique: qaData.critique,\n    image_url: imageUrl\n  }\n}];"
+      },
+      "id": "node-assemble-slack-card",
+      "name": "Assemble Slack Review Card Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4080, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"channel\": {{ JSON.stringify($json.channel_id) }},\n  \"thread_ts\": {{ JSON.stringify($json.thread_ts) }},\n  \"text\": \"📸 Post #\" + {{ $json.current_post }} + \" of \" + {{ $json.total_posts }} + \": \" + {{ JSON.stringify($json.theme) }},\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"📸 Post #\" + {{ $json.current_post }} + \" of \" + {{ $json.total_posts }} + \": \" + {{ JSON.stringify($json.theme) }}\n      }\n    },\n    {\n      \"type\": \"context\",\n      \"elements\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Vision QA Status:* \" + {{ JSON.stringify($json.qa_badge) }} + \" | *Critique:* \" + {{ JSON.stringify($json.critique) }}\n        }\n      ]\n    },\n    {\n      \"type\": \"image\",\n      \"image_url\": {{ JSON.stringify($json.image_url) }},\n      \"alt_text\": {{ JSON.stringify($json.headline_text) }}\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*Headline:* `\" + {{ $json.headline_text }} + \"`\\n\\n*Caption:*\\n\" + {{ JSON.stringify($json.caption_hook) }} + \"\\n\\n\" + {{ JSON.stringify($json.caption_body) }} + \"\\n\\n*CTA:* \" + {{ JSON.stringify($json.caption_cta) }} + \"\\n\\n*Hashtags:* \" + {{ JSON.stringify($json.hashtags) }}\n      }\n    },\n    {\n      \"type\": \"actions\",\n      \"block_id\": \"campaign_approval_actions\",\n      \"elements\": [\n        {\n          \"type\": \"button\",\n          \"text\": { \"type\": \"plain_text\", \"text\": \"✅ Approve & Next Post\" },\n          \"style\": \"primary\",\n          \"action_id\": \"approve_draft\",\n          \"value\": {{ JSON.stringify($json.campaign_id + ':' + $json.current_post) }}\n        },\n        {\n          \"type\": \"button\",\n          \"text\": { \"type\": \"plain_text\", \"text\": \"🔄 Request Revision\" },\n          \"action_id\": \"request_edit\",\n          \"value\": {{ JSON.stringify($json.campaign_id + ':' + $json.current_post) }}\n        },\n        {\n          \"type\": \"button\",\n          \"text\": { \"type\": \"plain_text\", \"text\": \"❌ Discard Campaign\" },\n          \"style\": \"danger\",\n          \"action_id\": \"discard_draft\",\n          \"value\": {{ JSON.stringify($json.campaign_id + ':' + $json.current_post) }}\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "node-deliver-review-card",
+      "name": "Deliver Interactive Review Card",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4300, 240]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "slack-interactive",
+        "options": {}
+      },
+      "id": "node-stage2-webhook",
+      "name": "Stage 2 Interactive Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 900]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse Slack Block Kit URL-encoded interactive payload\nlet payload = $json.body;\nif (typeof payload === 'string') {\n  payload = JSON.parse(decodeURIComponent(payload.replace(/^payload=/, '')));\n} else if (payload.payload) {\n  payload = typeof payload.payload === 'string' ? JSON.parse(payload.payload) : payload.payload;\n}\n\nconst action = (payload.actions && payload.actions[0]) || {};\nconst actionId = action.action_id || 'unknown';\nconst actionValue = action.value || '';\nconst parts = actionValue.split(':');\nconst campaignId = parts[0] || 'unknown';\nconst currentPost = parseInt(parts[1] || '1', 10);\n\nreturn [{\n  json: {\n    action_id: actionId,\n    campaign_id: campaignId,\n    current_post: currentPost,\n    channel_id: payload.channel ? payload.channel.id : '',\n    thread_ts: payload.message ? payload.message.ts : '',\n    user_id: payload.user ? payload.user.id : '',\n    response_url: payload.response_url\n  }\n}];"
+      },
+      "id": "node-parse-interactive-payload",
+      "name": "Parse Slack Block Actions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 900]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action_id }}",
+                    "rightValue": "approve_draft",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action_id }}",
+                    "rightValue": "request_edit",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action_id }}",
+                    "rightValue": "discard_draft",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-switch-action",
+      "name": "Switch on Action ID",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [540, 900]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel_id }}"
+            },
+            {
+              "name": "thread_ts",
+              "value": "={{ $json.thread_ts }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.current_post < 10 ? '✅ *Post #' + $json.current_post + ' Approved!* Persisting design metadata to Client Brain memory. Generating Post #' + ($json.current_post + 1) + '...' : '🎉 *Campaign Complete!* All 10 posts approved and stored in your brand library.' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-handle-approve",
+      "name": "Handle Approve & Progress Post",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 800]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel_id }}"
+            },
+            {
+              "name": "thread_ts",
+              "value": "={{ $json.thread_ts }}"
+            },
+            {
+              "name": "text",
+              "value": "📝 *Revision Requested for Post #{{ $json.current_post }}*\nPlease reply in this thread with your specific design notes (e.g. *headline adjustments, color balance, lighting, or layout*). The Creative Director will re-run the render immediately."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-handle-edit",
+      "name": "Handle Request Edit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 920]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "channel",
+              "value": "={{ $json.channel_id }}"
+            },
+            {
+              "name": "thread_ts",
+              "value": "={{ $json.thread_ts }}"
+            },
+            {
+              "name": "text",
+              "value": "❌ *Campaign Discarded.* State marked as DISCARDED. Token usage has been capped to protect budget."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-handle-discard",
+      "name": "Handle Discard Campaign",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 1040]
+    }
+  ],
+  "connections": {
+    "Slack Webhook Ingress": {
+      "main": [
+        [
+          {
+            "node": "Is Slack URL Verification?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Slack URL Verification?": {
+      "main": [
+        [
+          {
+            "node": "Respond to Slack Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Security & Retry Guardrail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Security & Retry Guardrail": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid Event?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid Event?": {
+      "main": [
+        [
+          {
+            "node": "Fast In-Thread Ack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fast In-Thread Ack": {
+      "main": [
+        [
+          {
+            "node": "Anti-Lazy Intake Evaluator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anti-Lazy Intake Evaluator": {
+      "main": [
+        [
+          {
+            "node": "Is Brief Complete?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Brief Complete?": {
+      "main": [
+        [
+          {
+            "node": "Dynamic Multi-Client Brain Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post Intake Checklist & Halt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dynamic Multi-Client Brain Lookup": {
+      "main": [
+        [
+          {
+            "node": "Creative Director Campaign Planner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Creative Director Campaign Planner": {
+      "main": [
+        [
+          {
+            "node": "Dynamic Copywriter & Parameter Extraction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dynamic Copywriter & Parameter Extraction": {
+      "main": [
+        [
+          {
+            "node": "Image Provider Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Provider Router": {
+      "main": [
+        [
+          {
+            "node": "Google Gemini / Imagen Engine",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ideogram v2 Graphic Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ideogram v2 Graphic Engine": {
+      "main": [
+        [
+          {
+            "node": "Normalize Image URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini / Imagen Engine": {
+      "main": [
+        [
+          {
+            "node": "Normalize Image URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Image URL": {
+      "main": [
+        [
+          {
+            "node": "Download Image Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image Binary": {
+      "main": [
+        [
+          {
+            "node": "Permanent Storage (Slack files.uploadV2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Permanent Storage (Slack files.uploadV2)": {
+      "main": [
+        [
+          {
+            "node": "Multimodal Vision QA Inspector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Multimodal Vision QA Inspector": {
+      "main": [
+        [
+          {
+            "node": "Did Vision QA Pass?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did Vision QA Pass?": {
+      "main": [
+        [
+          {
+            "node": "Assemble Slack Review Card Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retries < 2?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retries < 2?": {
+      "main": [
+        [
+          {
+            "node": "Auto-Retry Prompt Refiner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Assemble Slack Review Card Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Retry Prompt Refiner": {
+      "main": [
+        [
+          {
+            "node": "Image Provider Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assemble Slack Review Card Data": {
+      "main": [
+        [
+          {
+            "node": "Deliver Interactive Review Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stage 2 Interactive Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Slack Block Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Slack Block Actions": {
+      "main": [
+        [
+          {
+            "node": "Switch on Action ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch on Action ID": {
+      "main": [
+        [
+          {
+            "node": "Handle Approve & Progress Post",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Request Edit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Handle Discard Campaign",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
